@@ -1,0 +1,284 @@
+openapi: 3.0.3
+
+info:
+  title: BabyBilling CRM
+  description: |
+    Спецификация CRM-системы проекта **BabyBilling**, разработанного в рамках Nexign Bootcamp'24. Содержит методы для работы с аккаунтами абонентов и авторизации в системе.
+    
+    Аутентификация реализована посредством JWT-токенов. Всего в системе 2 роли: менеджер и абонент.
+    
+    [Репозиторий проекта](https://github.com/Anna-Vl-Green/Baby-Billing-10)
+  version: '1.0'
+
+externalDocs:
+  description: Документация (Confluence)
+  url: https://babybilling.atlassian.net/wiki/spaces/KB/pages/2228225
+
+servers:
+  - url: http://localhost:8080/api/v1
+
+tags:
+  - name: managers
+    description: Операции с аккантами менеджеров
+  - name: subscribers
+    description: Операции с аккаунтами абонентов
+
+paths:
+
+  /managers/login:
+    post:
+      tags:
+        - managers
+      summary: Авторизоваться по логину и паролю
+      description: Авторизация пользователя с ролью **Менеджер** в системе.
+      operationId: authManager
+      requestBody:
+        description: Обязательные параметры - логин (`username`) и пароль (`password`).
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 50
+                  example: admin
+                password:
+                  type: string
+                  minLength: 3
+                  maxLength: 64
+                  example: admin
+      responses:
+        '200':
+          description: Менеджер успешно авторизован
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6Ijc4MDA1NTUzNTM1IiwibWFuYWdlciI6dHJ1ZSwiaWF0IjoxNzEzOTg3MjA0LCJleHAiOjE3MTM5OTA4MDR9.WjpOwoRG9n6_ys3-5oIaWn4Umg1pdNLyB4EvXF19eL4
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Неверный логин или пароль
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  
+  /subscribers/login:
+    post:
+      tags:
+        - subscribers
+      summary: Авторизоваться по номеру телефона
+      description: Авторизация в системе для пользователя с ролью **Абонент**.
+      operationId: authSubscriber
+      requestBody:
+        description: 
+          Обязательный параметр - номер телефона абонента (`msisdn`). 
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - msisdn
+              properties:
+                msisdn:
+                  type: string
+                  pattern: '^7\d{10}$'
+                  example: 78005553535
+      responses:
+        '200':
+          description: Абонент успешно авторизован
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6Ijc4MDA1NTUzNTM1IiwibWFuYWdlciI6dHJ1ZSwiaWF0IjoxNzEzOTg3MjA0LCJleHAiOjE3MTM5OTA4MDR9.WjpOwoRG9n6_ys3-5oIaWn4Umg1pdNLyB4EvXF19eL4
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Абонент с указанным номером телефона не найден
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  
+  /subscribers/save:
+    post:
+      tags:
+        - subscribers
+      summary: Создать абонента
+      security:
+        - bearerAuth: []
+      description: 
+        Создание абонента с указанием номера телефона, баланса и тарифа.
+        Операция доступна только пользователям с ролью "Менеджер".
+      operationId: saveSubscriber
+      requestBody:
+        description: 
+          Обязательные параметры - номер телефона (`msisdn`) и идентификатор тарифа (`tariffId`). Если баланс (`money`) не указан, то он принимает значение по умолчанию - 100 у.е.
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - msisdn
+                - tariffId
+              properties:
+                msisdn:
+                  type: string
+                  pattern: '^7\d{10}$'
+                  example: 78005553535
+                tariffId:
+                  type: integer
+                  format: int32
+                  example: 12
+                money:
+                  type: number
+                  pattern: '^\d{1,9}.?\d?$'
+                  example: 100.1
+      responses:
+        '200':
+          description: Успешно создан новый абонент
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscriber'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  
+  /subscribers/changeTariff:
+    patch:
+      tags:
+        - subscribers
+      summary: Изменить тариф абонента
+      security:
+        - bearerAuth: []
+      description: 
+        Изменение тарифа абонента с указанием номера телефона и идентификатора тарифа.
+        Операция доступна только пользователям с ролью "Менеджер".
+      operationId: changeTariff
+      requestBody:
+        description: 
+          Обязательные параметры - номер телефона (`msisdn`) и идентификатор тарифа (`tariffId`).
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - msisdn
+                - tariffId
+              properties:
+                msisdn:
+                  type: string
+                  pattern: '^7\d{10}$'
+                  example: 78005553535
+                tariffId:
+                  type: integer
+                  format: int32
+                  example: 12
+      responses:
+        '200':
+          description: Тариф абонента успешно изменён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscriber'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  
+  /subscribers/pay:
+    patch:
+      tags:
+        - subscribers
+      summary: Пополнить баланс абонента
+      security: 
+        - bearerAuth: []
+      description: 
+        Пополнение баланса абонента на указанную сумму.
+        Операция доступна только пользователям с ролью "Абонент".
+      operationId: pay
+      requestBody:
+        description: 
+          Обязательные параметры - сумма пополнения баланса (`money`). 
+          Номер абонента определяется по токену.
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - money
+              properties:
+                money:
+                  type: number
+                  pattern: '^\d{1,9}.?\d?$'
+                  example: 100.1
+      responses:
+        '200':
+          description: Счёт абонента успешно пополнен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscriber'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500': 
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    Subscriber:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 123
+        msisdn:
+          type: string
+          pattern: '^7\d{10}$'
+          example: 78005553535
+        tariffId:
+          type: integer
+          format: int32
+          example: 12
+        money: 
+          type: number
+          pattern: '^\d{1,9}.?\d?$'
+          example: 100.1
+  responses:
+    BadRequest:
+      description: 'Запрос составлен некорректно'
+    Unauthorized:
+      description: 'Токен не прошёл проверку подлинности'
+    Forbidden:
+      description: 'У пользователя нет права совершать эту операцию'
+    InternalServerError:
+      description: 'Внутренняя ошибка сервера'
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
